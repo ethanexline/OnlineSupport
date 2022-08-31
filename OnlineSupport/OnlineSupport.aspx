@@ -28,7 +28,7 @@
             conn.received(function (data) {
                 if (data.substr(0, 11) == "SUPPORTVIEW") {
                     document.getElementById("supportHeader").style.display = "block";
-                    document.getElementById("queueArea").style.display = "block";
+                    document.getElementById("queueArea").style.display = "flex";
                 }
                 else if (data.substr(0, 8) == "QUEUEPOS") {
                     document.getElementById("queuePosition").style.display = "block";
@@ -159,10 +159,10 @@
             <div id="message_list" style="border:solid 1px silver; padding:5px; min-height:400px; width:560px; max-height:400px; overflow:auto; margin-right: 50px;">            
             </div>
 
-            <div style="display: flex; flex-direction: column; max-height: 412px; overflow-y: auto;">
-                <h2 id="queueArea" style="display: none; text-decoration: underline;">Users in queue:</h2>
+            <div id="queueArea" style="display: none; flex-direction: column; max-height: 412px; width: max-content;">
+                <h2 style="text-decoration: underline;">Users in queue:</h2>
 
-                <ul id="user_list">
+                <ul id="user_list" style="overflow-y: auto;">
                 </ul>
             </div>
         </div>
