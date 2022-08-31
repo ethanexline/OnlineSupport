@@ -7,11 +7,9 @@
     <title></title>
     <script src="Scripts/jquery-1.6.4.min.js"></script>
     <script src="Scripts/jquery.signalR-1.0.0-rc2.min.js"></script>
-    <script type="text/javascript">        
+    <script type="text/javascript">   
         $(function () {
             var conn = $.connection();
-            var img1 = "online.png";
-            var img2 = "offline.png";
             $('#message').keypress(function (event) {
                 if (event.keyCode == 13) {
                     event.preventDefault();
@@ -20,15 +18,47 @@
             });
 
             conn.received(function (data) {
-                if (data.substr(0, 11) == "QUEUEUPDATE") {
+                if (data.substr(0, 11) == "SUPPORTVIEW") {
                     document.getElementById("supportHeader").style.display = "block";
-                    document.getElementById("queueLength").innerText = "Users currently in queue: " + data.slice(11);
+                    document.getElementById("queueArea").style.display = "block";
+                }
+                else if (data.substr(0, 8) == "QUEUEPOS") {
+                    document.getElementById("queuePosition").style.display = "block";
+                    document.getElementById("queuePosition").innerText = "Current Position: " + data.slice(8);
+                }
+                else if (data.substr(0, 8) == "QUEUEFIN") {
+                    document.getElementById("queuePosition").style.display = "none";
+                }
+                else if (data.substr(0, 8) == "QUEUEADD") {
+                    var newUser = document.createElement('li');
+                    newUser.id = data.slice(8);
+                    var userLink = document.createElement('a');
+                    var userLink2 = document.createElement('a');
+                    userLink.title = "End this session";
+                    userLink2.title = "Make this the active session";
+                    userLink.addEventListener('click', function (e)
+                    {
+                        document.getElementById("user_list").removeChild(document.getElementById(data.slice(8)));
+                        conn.send("ENDSESSION" + data.slice(8));
+                    });
+                    userLink2.addEventListener('click', function (e) {
+                        document.getElementById("user_list").removeChild(document.getElementById(data.slice(8)));
+                        conn.send("CHGSESSION" + data.slice(8));
+                    });
+                    userLink.innerHTML = "<img src='/images/delete.png' />";
+                    userLink2.innerText = "User " + data.slice(8);
+                    newUser.appendChild(userLink);
+                    newUser.appendChild(userLink2);
+                    document.getElementById("user_list").appendChild(newUser);
+                }
+                else if (data.substr(0, 8) == "QUEUEDEL") {
+                    document.getElementById("user_list").removeChild(document.getElementById(data.slice(8)));
                 }
                 else {
                     $("#message_list").append(data + "<br/>");
                     playSound();
                     document.getElementById("message_list").lastElementChild.scrollIntoView();
-                    if (data == "Support is currently offline. Please send an email to cdonohue@autoplusap.com for urgent inquiries.") {
+                    if (data == "Support is currently offline. Please send an email to cdonohue@autoplusap.com for urgent inquiries.<br/>") {
                         $("#Status_div").html("<img alt=\"offline\" src=\"offline.png\" style=\"border:none;\" />");
                     }
                     else if (data == "Support is now online.") {
@@ -45,13 +75,13 @@
             conn.start()
                 .promise()
                 .done(function () {
-                    $("#Wait_div").css("visibility", "hidden")
+                    $("#Wait_div").css("visibility", "hidden");
                     $("#send").click(function () {
                         if ($("#message").val().length == 0)
                             return;
                         conn.send($("#message").val());
                         $('#message').val('').focus();
-                    })
+                    });
                 });
         });
     </script>  
@@ -70,6 +100,37 @@
         {
             height:30px; background-color:#efefef; border:solid 1px silver;
         }
+
+        #user_list 
+        {
+            display: flex;
+            flex-direction: column;
+            list-style: none;
+            padding-left: 0px;
+            margin-top: 0px;
+        }
+
+        #user_list li
+        {
+            display: flex;
+            font-size: large;
+        }
+
+        #user_list li a:last-child:hover
+        {
+            color: blue;
+        }
+
+        #user_list a
+        {
+            cursor: pointer;
+        }
+
+        img[src='/images/delete.png'] 
+        {
+            height: 25px;
+            padding-right: 15px;
+        }
     </style>
 </head>
 <body style="margin:20px; font-family:'Segoe UI',sans-serif;">
@@ -83,15 +144,25 @@
             <div id="Status_div">           
             </div>
 
-            <label id="queueLength"></label>
+            <label id="queuePosition" style="display: none;"></label>
         </div>
         
-        <div id="message_list" style="border:solid 1px silver; padding:5px; min-height:400px; width:560px; max-height:400px; overflow:auto;">            
+        <div style="display: flex;">
+            <div id="message_list" style="border:solid 1px silver; padding:5px; min-height:400px; width:560px; max-height:400px; overflow:auto; margin-right: 50px;">            
+            </div>
+
+            <div style="display: flex; flex-direction: column; max-height: 412px; overflow-y: auto;">
+                <h2 id="queueArea" style="display: none; text-decoration: underline;">Users in queue:</h2>
+
+                <ul id="user_list">
+                </ul>
+            </div>
         </div>
+        
         <br />
         <div>
             <input id="message" name="message" type="text" style="width:500px; border:solid 1px silver; height:25px;" />&nbsp;&nbsp;
-            <input id="send" name="send" value="Send" type="button"  class="btn"/>
+            <input id="send" name="send" value="Send" type="button" class="btn"/>
         </div>
         
     </div>

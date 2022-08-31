@@ -82,6 +82,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Global.asax" />
+    <Content Include="images\delete.png" />
     <Content Include="offline.png" />
     <Content Include="online.png" />
     <Content Include="OnlineSupport.aspx" />
