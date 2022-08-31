@@ -12,35 +12,35 @@ namespace OnlineSupport
     {
         //static string group_name = "OnlineSupport";  
         /// <summary>
-        /// operator_id is set when operator is online
+        /// operator_id is set when support is online
         /// </summary>
         static string operator_id = string.Empty;
         /// <summary>
-        /// sb is for storing message,and when user left the chat,save it to DB or file
+        /// sb stores all messages that transpire in a chat, to be saved on disconnect
         /// </summary>
         static StringBuilder sb = new StringBuilder();
         /// <summary>
-        /// operator_added_to_group is set when operator is online
+        /// operator_added_to_group is set when support is online
         /// </summary>
         static bool operator_added_to_group = false;
         /// <summary>
-        /// max 2 ids for 1-1 chat,other users will be stored in queue object (in memory)
-        /// group_ids[0] is for operator
+        /// holds currently chatting members, all other users will be stored in queue 
+        /// group_ids[0] is for support
         /// group_ids[1] is for user
         /// </summary>
         static string[] group_ids = { string.Empty, string.Empty };
         /// <summary>
-        /// waiting_users is a queue object,contains users connectionId
+        /// contains users waiting for active session (subsequent to the first user)
         /// </summary>
         static Queue<string> waiting_users = new Queue<string>();
 
-
+        
         protected override Task OnConnected(IRequest request, string connectionId)
         {
 
             if (OnlineSupport.operator_online)
             {
-
+                //if support login was done and there wasn't already a session in the support role
                 if (!operator_added_to_group)
                 {
 
@@ -57,6 +57,7 @@ namespace OnlineSupport
                             Connection.Send(connectionId, string.Format("No user is connected<br/>"));
                         });
                     }
+                    //this can't really happen (user in active position without active support)
                     else
                     {
                         return Connection.Broadcast(string.Format("Support is now online.<br/>"));
@@ -64,13 +65,13 @@ namespace OnlineSupport
                 }
 
             }
+            //if site is visited the regular way and no session in support role
             else
             {
                 return Connection.Send(connectionId, string.Format("Support is currently offline. Please send an email to cdonohue@autoplusap.com for urgent inquiries.<br/>"));
             }
 
-
-
+            //if there's already a session in support role and no session in active position
             if (string.IsNullOrEmpty(group_ids[1]))
             {
                 group_ids[1] = connectionId;
@@ -81,6 +82,7 @@ namespace OnlineSupport
                     Connection.Send(operator_id, string.Format("New user has joined<br/>"));
                 });
             }
+            //since both roles already have active sessions, insert session into queue and inform them thusly
             else
             {
                 if (operator_id != connectionId)
@@ -115,6 +117,11 @@ namespace OnlineSupport
                 return base.OnReceived(request, connectionId, "");
             }
 
+            /*******
+             * these are system messages sent by the links that represent each user and session that are created when a user first enters the queue
+             * ENDSESSION comes from clicking the X, and the user's connectionID is appended to the message so data.Substring(10) represents the 
+             * connectionID of the user whose session we're ending
+             *******/
             if (data.StartsWith("ENDSESSION"))
             {
                 string end = data.Substring(10);
@@ -125,6 +132,11 @@ namespace OnlineSupport
                     OnDisconnected(request, end);
                 });
             }
+            /*******
+             * CHGSESSION comes from clicking the user, and the user's connectionID is appended to the message so data.Substring(10) represents the 
+             * connectionID of the user whose session we're making the active session. The current active session is placed at the back of the queue,
+             * the passed in one is placed in the active position, and every other user receives a queue position update
+             *******/
             else if (data.StartsWith("CHGSESSION"))
             {
                 string old = group_ids[1];
@@ -149,6 +161,7 @@ namespace OnlineSupport
                 });
             }
 
+            //if we've gotten this far, data is going to actually end up displayed in the feed and needs to be formatted thusly
             if (connectionId == operator_id)
                 data = string.Format("<b>Support</b>: " + data + "<br/>");
             else
@@ -156,9 +169,11 @@ namespace OnlineSupport
             sb.AppendLine(data);
             return Task.Factory.StartNew(() =>
             {
+                //support will always get the message
                 Connection.Send(group_ids[0], data);
+
                 /*******
-                 * To force end the chat with user, support can enter "EXIT"
+                 * support entering "EXIT" immediately kills current active session 
                  *******/
                 if (data.Equals("<b>Support</b>: EXIT<br/>"))
                 {
@@ -166,6 +181,7 @@ namespace OnlineSupport
                     Connection.Send(group_ids[1], "QUEUEFIN");
                     OnDisconnected(request, group_ids[1]);
                 }
+                //otherwise, just send the message
                 else
                     Connection.Send(group_ids[1], data);
             });
@@ -173,6 +189,8 @@ namespace OnlineSupport
 
         protected override Task OnDisconnected(IRequest request, string connectionId)
         {
+            //if both active session positions are filled and the passed in connection is neither
+            //e.g. a user in the queue closes the window or is remotely disconnected by support
             if (!string.IsNullOrEmpty(group_ids[0]) && !string.IsNullOrEmpty(group_ids[1]) && !group_ids.Contains(connectionId))
             {
                 waiting_users = CustomQ<string>.RemoveItem(waiting_users, connectionId);
@@ -187,6 +205,7 @@ namespace OnlineSupport
                 });
             }
 
+            //if there's no active session and nothing in queue, just make sure that session doesn't appear in support's queue list
             if (string.IsNullOrEmpty(group_ids[1]))
             {
                 return Task.Factory.StartNew(() =>
@@ -201,6 +220,7 @@ namespace OnlineSupport
             sb.Clear();
             SaveChatToFile(message);
 
+            //if disconnecting user is support, kill all sessions and inform all users that support is no longer online
             if (connectionId == operator_id)
             {
                 OnlineSupport.operator_online = false;
@@ -214,6 +234,7 @@ namespace OnlineSupport
             {
                 string toRemove = group_ids[1];
                 group_ids[1] = string.Empty;
+                //if queue isn't empty, update queue positions and queue listing and give the next user in the queue the active position
                 if (waiting_users.Count > 0)
                 {
                     group_ids[1] = waiting_users.Dequeue();
@@ -229,6 +250,7 @@ namespace OnlineSupport
                         Connection.Send(group_ids[0], "QUEUEDEL" + group_ids[1]);
                     });
                 }
+                //if queue is empty, update listing for support
                 else
                 {
                     return Task.Factory.StartNew(() =>

@@ -17,6 +17,14 @@
                 }
             });
 
+            /*******
+             * System messages and definitions:
+             * SUPPORTVIEW - indicates user is in Support role and should have the header and queue area displayed
+             * QUEUEPOS - indicates user is in queue and contains current queue position
+             * QUEUEFIN - indicates user has left the queue, whether by disconnection or becoming the active session, and hides queue position label
+             * QUEUEADD - sent to Support role to indicate a new user has entered the queue; builds and places links in listing for passed-in ConnectionID accordingly
+             * QUEUEDEL - sent to Support role to indicate a user has left the queue; deletes links in listing for passed-in ConnectionID
+             *******/
             conn.received(function (data) {
                 if (data.substr(0, 11) == "SUPPORTVIEW") {
                     document.getElementById("supportHeader").style.display = "block";
