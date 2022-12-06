@@ -43,7 +43,6 @@ namespace OnlineSupport
                 //if support login was done and there wasn't already a session in the support role
                 if (!operator_added_to_group)
                 {
-
                     operator_id = connectionId;
                     group_ids[0] = connectionId;
 
@@ -51,16 +50,64 @@ namespace OnlineSupport
 
                     if (string.IsNullOrWhiteSpace(group_ids[1]))
                     {
-                        return Task.Factory.StartNew(() =>
+                        if (!(waiting_users.Count < 1))
                         {
-                            Connection.Send(connectionId, "SUPPORTVIEW");
-                            Connection.Send(connectionId, string.Format("No user is connected<br/>"));
-                        });
+                            group_ids[1] = waiting_users.Dequeue();
+                            return Task.Factory.StartNew(() =>
+                            {
+                                Connection.Broadcast(string.Format("Support is now online.<br/>"), new string[] { group_ids[0] });
+
+                                foreach (string user in waiting_users)
+                                {
+                                    Connection.Send(operator_id, "QUEUEADD" + user);
+                                    Connection.Send(user, string.Format("QUEUEPOS" + CustomQ<string>.Position(waiting_users, user).ToString()));
+                                }
+
+                                Connection.Send(group_ids[1], "QUEUEFIN");
+                                Connection.Send(group_ids[1], string.Format("You are now connected to Support.<br/>"));
+                                
+                                Connection.Send(operator_id, "SUPPORTVIEW");
+                                Connection.Send(operator_id, string.Format("New user has joined<br/>"));
+                            });
+                        }
+                        else
+                        {
+                            return Task.Factory.StartNew(() =>
+                            {
+                                Connection.Send(operator_id, "SUPPORTVIEW");
+                                Connection.Send(operator_id, string.Format("No user is connected<br/>"));
+                            });
+                        }
                     }
-                    //this can't really happen (user in active position without active support)
+                    //if support disconnects and reconnects with a session still in the active position
                     else
                     {
-                        return Connection.Broadcast(string.Format("Support is now online.<br/>"));
+                        if (!(waiting_users.Count < 1))
+                        {
+                            return Task.Factory.StartNew(() =>
+                            {
+                                Connection.Broadcast(string.Format("Support is now online.<br/>"), new string[] { group_ids[0] });
+
+                                foreach (string user in waiting_users)
+                                {
+                                    Connection.Send(operator_id, "QUEUEADD" + user);
+                                    Connection.Send(user, string.Format("QUEUEPOS" + CustomQ<string>.Position(waiting_users, user).ToString()));
+                                }
+
+                                Connection.Send(group_ids[1], string.Format("You are now connected to Support.<br/>"));
+
+                                Connection.Send(operator_id, "SUPPORTVIEW");
+                                Connection.Send(operator_id, string.Format("New user has joined<br/>"));
+                            });
+                        }
+                        else
+                        {
+                            return Task.Factory.StartNew(() =>
+                            {
+                                Connection.Send(operator_id, "SUPPORTVIEW");
+                                Connection.Send(operator_id, string.Format("No user is connected<br/>"));
+                            });
+                        }
                     }
                 }
 
@@ -68,7 +115,12 @@ namespace OnlineSupport
             //if site is visited the regular way and no session in support role
             else
             {
-                return Connection.Send(connectionId, string.Format("Support is currently offline. Please send an email to cdonohue@autoplusap.com for urgent inquiries.<br/>"));
+                waiting_users.Enqueue(connectionId);
+                return Task.Factory.StartNew(() =>
+                {
+                    Connection.Send(connectionId, "QUEUEPOS" + waiting_users.Count.ToString());
+                    Connection.Send(connectionId, string.Format("Support is currently offline. Please send an email to 'whatever' for urgent inquiries.<br/>"));
+                });
             }
 
             //if there's already a session in support role and no session in active position
@@ -107,7 +159,7 @@ namespace OnlineSupport
         protected override Task OnReceived(IRequest request, string connectionId, string data)
         {
             if (!OnlineSupport.operator_online)
-                return Connection.Send(connectionId, string.Format("Support is currently offline. Please send an email to cdonohue@autoplusap.com for urgent inquiries.<br/>"));
+                return Connection.Send(connectionId, string.Format("Support is currently offline. Please send an email to 'whatever' for urgent inquiries.<br/>"));
 
             if (!string.IsNullOrEmpty(group_ids[0]) && !string.IsNullOrEmpty(group_ids[1]) && !group_ids.Contains(connectionId))
                 return Connection.Send(connectionId, string.Format("Support is assisting another user. Please wait...</br>"));
@@ -194,25 +246,39 @@ namespace OnlineSupport
             if (!string.IsNullOrEmpty(group_ids[0]) && !string.IsNullOrEmpty(group_ids[1]) && !group_ids.Contains(connectionId))
             {
                 waiting_users = CustomQ<string>.RemoveItem(waiting_users, connectionId);
-                return Task.Factory.StartNew(() =>
+                if (!string.IsNullOrEmpty(group_ids[0]))
                 {
-                    foreach (string user in waiting_users)
+                    return Task.Factory.StartNew(() =>
                     {
-                        Connection.Send(user, string.Format("QUEUEPOS" + CustomQ<string>.Position(waiting_users, user).ToString()));
-                    }
-                    Connection.Send(group_ids[0], "QUEUEDEL" + connectionId);
-                    base.OnDisconnected(request, connectionId);
-                });
+                        foreach (string user in waiting_users)
+                        {
+                            Connection.Send(user, string.Format("QUEUEPOS" + CustomQ<string>.Position(waiting_users, user).ToString()));
+                        }
+                        Connection.Send(group_ids[0], "QUEUEDEL" + connectionId);
+                        base.OnDisconnected(request, connectionId);
+                    });
+                }
+                else
+                {
+                    return base.OnDisconnected(request, connectionId);
+                }
             }
 
             //if there's no active session and nothing in queue, just make sure that session doesn't appear in support's queue list
             if (string.IsNullOrEmpty(group_ids[1]))
             {
-                return Task.Factory.StartNew(() =>
+                if (!string.IsNullOrEmpty(group_ids[0]))
                 {
-                    Connection.Send(group_ids[0], "QUEUEDEL" + connectionId);
-                    base.OnDisconnected(request, connectionId);
-                });
+                    return Task.Factory.StartNew(() =>
+                    {
+                        Connection.Send(group_ids[0], "QUEUEDEL" + connectionId);
+                        base.OnDisconnected(request, connectionId);
+                    });
+                }
+                else
+                {
+                    return base.OnDisconnected(request, connectionId);
+                }
             }
 
             sb.Append("====chat ends====\n");
@@ -220,44 +286,59 @@ namespace OnlineSupport
             sb.Clear();
             SaveChatToFile(message);
 
-            //if disconnecting user is support, kill all sessions and inform all users that support is no longer online
+            //if disconnecting user is support, inform all users that support is no longer online and do administration
             if (connectionId == operator_id)
             {
                 OnlineSupport.operator_online = false;
                 operator_added_to_group = false;
                 group_ids[0] = string.Empty;
-                group_ids[1] = string.Empty;
-                waiting_users.Clear();
-                return Connection.Broadcast(string.Format("Support is currently offline. Please send an email to cdonohue@autoplusap.com for urgent inquiries.<br/>"));
+                //group_ids[1] = string.Empty;
+                //waiting_users.Clear();
+                return Connection.Broadcast(string.Format("Support is currently offline. Please send an email to 'whatever' for urgent inquiries.<br/>"));
             }
             else
             {
                 string toRemove = group_ids[1];
                 group_ids[1] = string.Empty;
+
                 //if queue isn't empty, update queue positions and queue listing and give the next user in the queue the active position
                 if (waiting_users.Count > 0)
                 {
                     group_ids[1] = waiting_users.Dequeue();
-                    return Task.Factory.StartNew(() =>
+                    if (!string.IsNullOrEmpty(group_ids[0]))
                     {
-                        foreach (string user in waiting_users)
+                        return Task.Factory.StartNew(() =>
                         {
-                            Connection.Send(user, string.Format("QUEUEPOS" + CustomQ<string>.Position(waiting_users, user).ToString()));
-                        }
-                        Connection.Send(group_ids[1], string.Format("You are now connected to Support<br/>"));
-                        Connection.Send(group_ids[1], "QUEUEFIN");
-                        Connection.Send(group_ids[0], string.Format("================User has left================<br/>New User has joined<br/>"));
-                        Connection.Send(group_ids[0], "QUEUEDEL" + group_ids[1]);
-                    });
+                            foreach (string user in waiting_users)
+                            {
+                                Connection.Send(user, string.Format("QUEUEPOS" + CustomQ<string>.Position(waiting_users, user).ToString()));
+                            }
+                            Connection.Send(group_ids[1], string.Format("You are now connected to Support<br/>"));
+                            Connection.Send(group_ids[1], "QUEUEFIN");
+                            Connection.Send(group_ids[0], string.Format("================User has left================<br/>New User has joined<br/>"));
+                            Connection.Send(group_ids[0], "QUEUEDEL" + group_ids[1]);
+                        });
+                    }
+                    else
+                    {
+                        return base.OnDisconnected(request, connectionId);
+                    }
                 }
                 //if queue is empty, update listing for support
                 else
                 {
-                    return Task.Factory.StartNew(() =>
+                    if (!string.IsNullOrEmpty(group_ids[0]))
                     {
-                        Connection.Send(group_ids[0], string.Format("=================User has left===============<br/>There are no more users in queue<br/>"));
-                        Connection.Send(group_ids[0], "QUEUEDEL" + toRemove);
-                    });
+                        return Task.Factory.StartNew(() =>
+                        {
+                            Connection.Send(group_ids[0], string.Format("=================User has left===============<br/>There are no more users in queue<br/>"));
+                            Connection.Send(group_ids[0], "QUEUEDEL" + toRemove);
+                        });
+                    }
+                    else
+                    {
+                        return base.OnDisconnected(request, connectionId);
+                    }
                 }
             }
         }

@@ -44,8 +44,7 @@
                     var userLink2 = document.createElement('a');
                     userLink.title = "End this session";
                     userLink2.title = "Make this the active session";
-                    userLink.addEventListener('click', function (e)
-                    {
+                    userLink.addEventListener('click', function (e) {
                         document.getElementById("user_list").removeChild(document.getElementById(data.slice(8)));
                         conn.send("ENDSESSION" + data.slice(8));
                     });
@@ -66,16 +65,18 @@
                     $("#message_list").append(data + "<br/>");
                     playSound();
                     document.getElementById("message_list").lastElementChild.scrollIntoView();
-                    if (data == "Support is currently offline. Please send an email to cdonohue@autoplusap.com for urgent inquiries.<br/>") {
-                        $("#Status_div").html("<img alt=\"offline\" src=\"offline.png\" style=\"border:none;\" />");
+                    console.log(data.startsWith("Support is currently offline."));
+                    if (data.startsWith("Support is currently offline.")) {
+                        document.getElementById("queuePosition").style.display = "none";
+                        document.getElementById("Status_div").innerHTML = "<img alt=\"offline\" src=\"offline.png\" />";
                     }
                     else if (data == "Support is now online.") {
                         location.reload(true);
-                        $("#Status_div").html("<img alt=\"online\" src=\"online.png\" />");
+                        document.getElementById("Status_div").innerHTML = "<img alt=\"online\" src=\"online.png\" />";
                         return false;
                     }
                     else {
-                        $("#Status_div").html("<img alt=\"online\" src=\"online.png\" />");
+                        document.getElementById("Status_div").innerHTML = "<img alt=\"online\" src=\"online.png\" />";
                     }
                 }
             });
@@ -156,7 +157,7 @@
         </div>
         
         <div style="display: flex;">
-            <div id="message_list" style="border:solid 1px silver; padding:5px; min-height:400px; width:560px; max-height:400px; overflow:auto; margin-right: 50px;">            
+            <div id="message_list" style="border: solid 1px silver; padding: 5px; min-height: 400px; width: 560px; max-height: 400px; overflow: auto; margin-right: 50px;">            
             </div>
 
             <div id="queueArea" style="display: none; flex-direction: column; max-height: 412px; width: max-content;">
