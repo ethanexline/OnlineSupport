@@ -146,7 +146,7 @@
     <form id="form1" runat="server">       
     <div>
         <h1 id="supportHeader" style="display: none;">Support Mode</h1>
-        <div id="Wait_div" style="visibility:visible;">
+        <div id="Wait_div" style="visibility: visible;">
             <span class="heading" >Please wait....</span>
         </div>
         <div style="display: flex; justify-content: space-between; width:560px; align-items: center; font-size: large;">

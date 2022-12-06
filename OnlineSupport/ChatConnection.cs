@@ -152,8 +152,6 @@ namespace OnlineSupport
                     return base.OnConnected(request, connectionId);
                 }
             }
-
-
         }
 
         protected override Task OnReceived(IRequest request, string connectionId, string data)
@@ -292,8 +290,7 @@ namespace OnlineSupport
                 OnlineSupport.operator_online = false;
                 operator_added_to_group = false;
                 group_ids[0] = string.Empty;
-                //group_ids[1] = string.Empty;
-                //waiting_users.Clear();
+
                 return Connection.Broadcast(string.Format("Support is currently offline. Please send an email to 'whatever' for urgent inquiries.<br/>"));
             }
             else
